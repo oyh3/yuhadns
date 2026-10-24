@@ -5,12 +5,39 @@
  */
 
 import { CONFIG_PROFILES, DEFAULT_UPSTREAMS, DEFAULT_MODE } from "./config.js";
+import { renderLandingHtml } from "./landing.js";
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // /dns-query 또는 /dns-query/:tag 경로 매칭 (오타 /dns-qury 및 끝의 슬래시 허용)
+    // 1) 루트 및 소개 웹페이지 서빙 (GET / 또는 GET /index.html)
+    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+      const profilesMeta = getProfilesMetadata();
+      const html = renderLandingHtml(profilesMeta, url.origin);
+      return new Response(html, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "public, max-age=60"
+        }
+      });
+    }
+
+    // 2) 프로필 메타데이터 JSON API (GET /api/profiles)
+    if (request.method === "GET" && url.pathname === "/api/profiles") {
+      const profilesMeta = getProfilesMetadata();
+      return new Response(JSON.stringify(profilesMeta), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "public, max-age=60"
+        }
+      });
+    }
+
+    // 3) DoH 엔드포인트: /dns-query 또는 /dns-query/:tag 경로 매칭 (오타 /dns-qury 및 끝의 슬래시 허용)
     const pathMatch = url.pathname.match(/^\/dns-qu(?:e)?ry(?:\/([^\/]+))?\/?$/i);
     if (!pathMatch) {
       return new Response("Not Found", { status: 404 });
@@ -85,7 +112,9 @@ export default {
 
     // 업스트림 조회 (fastest: 병렬 경합 또는 priority: 우선순위 순차 시도)
     const targetUpstreams = profile.upstreams && profile.upstreams.length > 0 ? profile.upstreams : DEFAULT_UPSTREAMS;
-    const mode = profile.mode || DEFAULT_MODE || "fastest";
+    let mode = (profile.mode || DEFAULT_MODE || "fastest").toLowerCase();
+    if (mode !== "priority") mode = "fastest"; // 오타 방지 및 표준화
+
     const upstreamResponse = await fetchUpstream(targetUpstreams, dnsMessage, mode);
 
     if (!upstreamResponse) {
@@ -112,6 +141,37 @@ export default {
     return finalResponse;
   }
 };
+
+/**
+ * config.js의 CONFIG_PROFILES로부터 소개 페이지용 메타데이터 추출
+ */
+function getProfilesMetadata() {
+  return Object.entries(CONFIG_PROFILES).map(([tag, prof]) => {
+    let mode = (prof.mode || DEFAULT_MODE || "fastest").toLowerCase();
+    if (mode !== "priority") mode = "fastest";
+
+    const isDefault = tag === "all";
+    const listsCount = Array.isArray(prof.lists) ? prof.lists.length : 0;
+    const upstreamsCount = Array.isArray(prof.upstreams) ? prof.upstreams.length : 0;
+
+    let defaultDesc = "";
+    if (listsCount > 0) {
+      defaultDesc = `${listsCount}개 광고/유해 도메인 차단 및 ${upstreamsCount}개 업스트림 질의`;
+    } else {
+      defaultDesc = `도메인 차단 없이 ${upstreamsCount}개 업스트림을 통한 순수 초고속 암호화 DNS`;
+    }
+
+    return {
+      tag,
+      name: prof.name || (isDefault ? "기본 종합 차단 (All)" : `${tag.toUpperCase()} 프로필`),
+      description: prof.description || defaultDesc,
+      badge: prof.badge || (isDefault ? "추천 (기본값)" : ""),
+      mode,
+      listsCount,
+      upstreamsCount
+    };
+  });
+}
 
 /**
  * RFC 1035 준수 정밀 도메인 및 질문 섹션 파서
@@ -286,44 +346,8 @@ async function fetchUpstreamPriority(upstreams, dnsMessage) {
       }
     } catch {
       clearTimeout(timer);
-      // 현재 업스트림 실패 시 다음 우선순위 서버로 순차 시도
     }
   }
 
   return null;
-}
-
-
-/**
- * 2) priority 모드: 배열 순서(우선순위)대로 시도하며 실패 시 다음 업스트림으로 fallback
- */
-async function fetchUpstreamPriority(upstreams, dnsMessage) {
-  const timeoutMs = 2000;
-
-  for (const url of upstreams) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Accept": "application/dns-message",
-          "Content-Type": "application/dns-message"
-        },
-        body: dnsMessage,
-        signal: controller.signal
-      });
-      clearTimeout(timer);
-      if (res.ok) {
-        return res;
-      }
-    } catch {
-      clearTimeout(timer);
-      // 현재 업스트림 실패 시 다음 우선순위 서버로 순차 시도
-    }
-  }
-
-  return null;
-}
 }

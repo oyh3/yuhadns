@@ -25,11 +25,7 @@
       --radius-lg: 20px;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
@@ -91,9 +87,7 @@
       transition: color 0.2s;
     }
 
-    .nav-link:hover {
-      color: #fff;
-    }
+    .nav-link:hover { color: #fff; }
 
     /* Hero Section */
     .hero {
@@ -194,10 +188,6 @@
       transform: translateY(-1px);
     }
 
-    .btn-copy:active {
-      transform: translateY(0);
-    }
-
     /* Grid Features */
     .section-title {
       font-size: 1.75rem;
@@ -259,7 +249,7 @@
       line-height: 1.55;
     }
 
-    /* Profiles Section */
+    /* Profiles Dynamic List */
     .profiles-list {
       display: flex;
       flex-direction: column;
@@ -275,11 +265,12 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, transform 0.2s;
     }
 
     .profile-item:hover {
       border-color: rgba(59, 130, 246, 0.35);
+      transform: translateY(-2px);
     }
 
     .profile-header {
@@ -392,9 +383,7 @@
       animation: fadeIn 0.3s ease;
     }
 
-    .tab-panel.active {
-      display: block;
-    }
+    .tab-panel.active { display: block; }
 
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(6px); }
@@ -494,7 +483,6 @@
 <body>
 
   <div class="container">
-    <!-- Header -->
     <header>
       <div class="logo">
         <span>🛡️ Yuhadns</span>
@@ -507,7 +495,6 @@
       </nav>
     </header>
 
-    <!-- Hero -->
     <section class="hero">
       <div class="status-tag">
         <span class="status-dot"></span>
@@ -525,7 +512,6 @@
       </div>
     </section>
 
-    <!-- Features -->
     <section id="features">
       <h2 class="section-title">주요 기능</h2>
       <p class="section-desc">보안, 속도, 호환성을 모두 충족하는 차세대 DNS 솔루션입니다.</p>
@@ -564,77 +550,16 @@
       </div>
     </section>
 
-    <!-- Profiles -->
+    <!-- Profiles: config.js와 100% 동적 자동 연동 -->
     <section id="profiles">
       <h2 class="section-title">제공 프로필 안내</h2>
-      <p class="section-desc">사용 환경에 맞는 프로필 URL을 선택하여 기기에 등록하세요.</p>
+      <p class="section-desc">설정된 모든 프로필이 자동으로 표시됩니다. 원하는 URL을 복사하여 기기에 등록하세요.</p>
 
-      <div class="profiles-list">
-        <!-- Profile: all -->
-        <div class="profile-item">
-          <div class="profile-header">
-            <div class="profile-title">
-              <span>기본 종합 차단 (All)</span>
-              <span class="badge badge-primary">추천 (기본값)</span>
-            </div>
-            <span class="badge">모드: Fastest 경합</span>
-          </div>
-          <p class="profile-desc">유튜브 광고, 주요 인앱 광고 및 웹 트래커를 전면 차단하고 Cloudflare Family/Security 업스트림을 경합합니다.</p>
-          <div class="profile-url-row">
-            <span class="profile-url dynamic-url" data-path="/dns-query">https://your-domain/dns-query</span>
-            <button class="btn-sm-copy" onclick="copyDohUrl(this.previousElementSibling.textContent)">URL 복사</button>
-          </div>
-        </div>
-
-        <!-- Profile: nonyt -->
-        <div class="profile-item">
-          <div class="profile-header">
-            <div class="profile-title">
-              <span>유튜브 제외 차단 (Non-YT)</span>
-              <span class="badge">우선순위 순차 모드</span>
-            </div>
-            <span class="badge">모드: Priority 순차</span>
-          </div>
-          <p class="profile-desc">유튜브 접속은 정상 허용하면서 일반 광고/트래킹 도메인을 차단합니다. Cloudflare 및 Quad9 순차 Fallback으로 안정성을 높였습니다.</p>
-          <div class="profile-url-row">
-            <span class="profile-url dynamic-url" data-path="/dns-query/nonyt">https://your-domain/dns-query/nonyt</span>
-            <button class="btn-sm-copy" onclick="copyDohUrl(this.previousElementSibling.textContent)">URL 복사</button>
-          </div>
-        </div>
-
-        <!-- Profile: noad -->
-        <div class="profile-item">
-          <div class="profile-header">
-            <div class="profile-title">
-              <span>AdGuard 업스트림 프로필 (No-Ad)</span>
-            </div>
-            <span class="badge">모드: Fastest 경합</span>
-          </div>
-          <p class="profile-desc">기본 차단 목록과 함께 AdGuard Family & Default 업스트림 DNS를 통해 강력한 2중 필터링을 제공합니다.</p>
-          <div class="profile-url-row">
-            <span class="profile-url dynamic-url" data-path="/dns-query/noad">https://your-domain/dns-query/noad</span>
-            <button class="btn-sm-copy" onclick="copyDohUrl(this.previousElementSibling.textContent)">URL 복사</button>
-          </div>
-        </div>
-
-        <!-- Profile: df -->
-        <div class="profile-item">
-          <div class="profile-header">
-            <div class="profile-title">
-              <span>순수 DoH 프록시 (Raw / Default)</span>
-            </div>
-            <span class="badge">모드: Fastest 경합</span>
-          </div>
-          <p class="profile-desc">도메인 차단 없이 Cloudflare(1.1.1.1)와 Google(8.8.8.8)을 경합하여 가장 빠른 암호화 DNS 조회만 수행합니다.</p>
-          <div class="profile-url-row">
-            <span class="profile-url dynamic-url" data-path="/dns-query/df">https://your-domain/dns-query/df</span>
-            <button class="btn-sm-copy" onclick="copyDohUrl(this.previousElementSibling.textContent)">URL 복사</button>
-          </div>
-        </div>
+      <div class="profiles-list" id="profiles-container">
+        <!-- Javascript에 의해 config.js 내용이 실시간 렌더링됩니다 -->
       </div>
     </section>
 
-    <!-- Setup Guide -->
     <section id="setup">
       <h2 class="section-title">간편 설정 가이드</h2>
       <p class="section-desc">사용하시는 기기 또는 브라우저 탭을 선택하여 설정을 완료하세요.</p>
@@ -646,7 +571,6 @@
         <button class="tab-btn" onclick="switchTab('router')">공유기 / AdGuard Home</button>
       </div>
 
-      <!-- Tab: Browser -->
       <div id="tab-browser" class="tab-panel active">
         <div class="setup-steps">
           <div class="step-item">
@@ -673,47 +597,44 @@
         </div>
       </div>
 
-      <!-- Tab: Android -->
       <div id="tab-android" class="tab-panel">
         <div class="setup-steps">
           <div class="step-item">
             <div class="step-num">1</div>
             <div class="step-content">
               <h4>안드로이드 Private DNS (DoT)와 DoH 안내</h4>
-              <p>안드로이드 기본 설정의 "개인 DNS"는 DoT(TLS 853) 규격을 사용합니다. DoH(HTTPS)를 사용하시려면 브라우저 자체 보안 DNS 설정을 이용하시거나, <strong>Intra</strong> 또는 <strong>AdGuard</strong> 앱을 사용하세요.</p>
+              <p>안드로이드 기본 "개인 DNS"는 DoT(TLS) 규격입니다. DoH(HTTPS)를 사용하시려면 브라우저 자체 보안 DNS를 이용하시거나, <strong>Intra</strong> 또는 <strong>AdGuard</strong> 앱을 사용하세요.</p>
             </div>
           </div>
           <div class="step-item">
             <div class="step-num">2</div>
             <div class="step-content">
               <h4>앱(Intra 등) 설정</h4>
-              <p>Google Play Store에서 <strong>Intra</strong> 앱을 설치한 후, <strong>설정 -> DNS-over-HTTPS 서버 URL</strong>에 위 DoH 주소를 입력하고 활성화합니다.</p>
+              <p>Play Store에서 <strong>Intra</strong> 설치 후, <strong>설정 -> DNS-over-HTTPS 서버 URL</strong>에 DoH 주소를 입력하고 활성화합니다.</p>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Tab: Apple -->
       <div id="tab-apple" class="tab-panel">
         <div class="setup-steps">
           <div class="step-item">
             <div class="step-num">1</div>
             <div class="step-content">
               <h4>Safari 및 브라우저</h4>
-              <p>iOS 14+ 및 macOS Big Sur+부터 시스템 레벨에서 암호화된 DNS를 지원합니다. Chrome 또는 Firefox 브라우저 설정에서 DoH를 직접 활성화할 수도 있습니다.</p>
+              <p>iOS 14+ 및 macOS Big Sur+부터 시스템 레벨에서 DoH를 지원합니다. Chrome / Firefox 브라우저 설정에서 DoH를 직접 활성화할 수도 있습니다.</p>
             </div>
           </div>
           <div class="step-item">
             <div class="step-num">2</div>
             <div class="step-content">
               <h4>DNS 프로파일(.mobileconfig) 적용</h4>
-              <p>DoH 프로파일 생성기(예: dns.notjakob.com)를 이용하여 도메인을 등록한 프로파일을 생성 후 기기에 설치할 수 있습니다.</p>
+              <p>dns.notjakob.com 등의 도구를 이용해 도메인을 지정한 프로파일을 생성 후 기기에 설치할 수 있습니다.</p>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Tab: Router / AdGuard Home -->
       <div id="tab-router" class="tab-panel">
         <div class="setup-steps">
           <div class="step-item">
@@ -735,44 +656,147 @@
       </div>
     </section>
 
-    <!-- Footer -->
     <footer>
       <p>Powered by Cloudflare Workers &bull; Fast, Secure, and Private DNS Proxy</p>
     </footer>
   </div>
 
-  <!-- Toast Notification -->
   <div id="toast" class="toast">✓ 주소가 클립보드에 복사되었습니다!</div>
 
   <script>
-    // 호스트 도메인 자동 감지 및 URL 치환
-    window.addEventListener("DOMContentLoaded", () => {
+    // 오프라인/로컬용 기본 Fallback 프로필
+    const FALLBACK_PROFILES = [
+      {
+        tag: "all",
+        name: "기본 종합 차단 (All)",
+        description: "유튜브 광고 및 주요 인앱 광고/트래커를 차단합니다.",
+        badge: "추천 (기본값)",
+        mode: "priority",
+        listsCount: 60,
+        upstreamsCount: 5
+      },
+      {
+        tag: "fastdns",
+        name: "Fast DNS (초고속 통신사 DNS)",
+        description: "국내 통신사(KT, SKB) 및 글로벌 DNS를 초고속 병렬 경합합니다.",
+        badge: "초고속",
+        mode: "fastest",
+        listsCount: 1,
+        upstreamsCount: 5
+      },
+      {
+        tag: "nonyt",
+        name: "유튜브 제외 차단 (Non-YT)",
+        description: "유튜브는 허용하면서 일반 광고/트래킹 도메인을 차단합니다.",
+        badge: "우선순위",
+        mode: "priority",
+        listsCount: 57,
+        upstreamsCount: 3
+      },
+      {
+        tag: "noad",
+        name: "AdGuard 업스트림 (No-Ad)",
+        description: "AdGuard 패밀리 및 기본 DNS를 통한 2중 필터링을 제공합니다.",
+        badge: "",
+        mode: "fastest",
+        listsCount: 57,
+        upstreamsCount: 2
+      },
+      {
+        tag: "google",
+        name: "Google Public DNS",
+        description: "차단 없이 구글 공식 DoH 업스트림을 통한 순수 암호화 프록시입니다.",
+        badge: "공식",
+        mode: "fastest",
+        listsCount: 0,
+        upstreamsCount: 2
+      }
+    ];
+
+    function escapeText(str) {
+      if (!str) return "";
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function renderProfilesList(profiles, origin) {
+      const container = document.getElementById("profiles-container");
+      if (!container) return;
+
+      if (!profiles || profiles.length === 0) {
+        container.innerHTML = "<p style='text-align:center;color:#9ca3af;'>등록된 프로필이 없습니다.</p>";
+        return;
+      }
+
+      container.innerHTML = profiles.map(p => {
+        const isDefault = p.tag === "all";
+        const path = isDefault ? "/dns-query" : "/dns-query/" + p.tag;
+        const fullUrl = origin + path;
+        const modeLabel = p.mode === "priority" ? "Priority 순차" : "Fastest 경합";
+        const badgeHtml = p.badge 
+          ? '<span class="badge ' + (isDefault ? 'badge-primary' : '') + '">' + escapeText(p.badge) + '</span>'
+          : (isDefault ? '<span class="badge badge-primary">기본값</span>' : '');
+
+        const filterInfo = p.listsCount > 0 
+          ? ' &bull; ' + p.listsCount + '개 도메인 필터링' 
+          : ' &bull; 차단 없음(초고속)';
+
+        return '' +
+          '<div class="profile-item">' +
+            '<div class="profile-header">' +
+              '<div class="profile-title">' +
+                '<span>' + escapeText(p.name || p.tag) + '</span>' +
+                badgeHtml +
+              '</div>' +
+              '<span class="badge">모드: ' + modeLabel + filterInfo + '</span>' +
+            '</div>' +
+            '<p class="profile-desc">' + escapeText(p.description || (p.tag + " 프로필입니다.")) + '</p>' +
+            '<div class="profile-url-row">' +
+              '<span class="profile-url dynamic-url" data-path="' + path + '">' + fullUrl + '</span>' +
+              '<button class="btn-sm-copy" onclick="copyDohUrl(this.previousElementSibling.textContent)">URL 복사</button>' +
+            '</div>' +
+          '</div>';
+      }).join("");
+    }
+
+    window.addEventListener("DOMContentLoaded", async () => {
       const isLocal = window.location.protocol === "file:" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
       const origin = isLocal ? "https://your-worker.workers.dev" : window.location.origin;
 
-      // 메인 히어로 URL 업데이트
       const mainUrlEl = document.getElementById("main-doh-url");
-      if (mainUrlEl) mainUrlEl.textContent = `${origin}/dns-query`;
+      if (mainUrlEl) mainUrlEl.textContent = origin + "/dns-query";
 
-      // 가이드 URL 업데이트
       const guideBrowser = document.getElementById("guide-browser-url");
-      if (guideBrowser) guideBrowser.textContent = `${origin}/dns-query`;
-      const guideAgh = document.getElementById("guide-agh-url");
-      if (guideAgh) guideAgh.textContent = `${origin}/dns-query/all`;
+      if (guideBrowser) guideBrowser.textContent = origin + "/dns-query";
 
-      // 동적 프로필 URL 엘리먼트 일괄 업데이트
-      document.querySelectorAll(".dynamic-url").forEach(el => {
-        const path = el.getAttribute("data-path") || "/dns-query";
-        el.textContent = `${origin}${path}`;
-      });
+      const guideAgh = document.getElementById("guide-agh-url");
+      if (guideAgh) guideAgh.textContent = origin + "/dns-query/all";
+
+      let profiles = window.__SERVER_PROFILES__;
+
+      if (!profiles || profiles.length === 0) {
+        try {
+          const res = await fetch("/api/profiles");
+          if (res.ok) {
+            profiles = await res.json();
+          }
+        } catch (e) {
+          // fetch 실패 시 fallback 사용
+        }
+      }
+
+      if (!profiles || profiles.length === 0) {
+        profiles = FALLBACK_PROFILES;
+      }
+
+      renderProfilesList(profiles, origin);
     });
 
-    // 클립보드 복사 함수
     function copyDohUrl(text) {
       navigator.clipboard.writeText(text).then(() => {
         showToast();
       }).catch(() => {
-        // Fallback for older browsers
         const textarea = document.createElement("textarea");
         textarea.value = text;
         document.body.appendChild(textarea);
@@ -783,7 +807,6 @@
       });
     }
 
-    // 토스트 팝업 제어
     function showToast() {
       const toast = document.getElementById("toast");
       toast.classList.add("show");
@@ -792,20 +815,18 @@
       }, 2200);
     }
 
-    // 탭 전환 제어
     function switchTab(tabId) {
       document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
       document.querySelectorAll(".tab-panel").forEach(panel => panel.classList.remove("active"));
 
       const targetBtn = Array.from(document.querySelectorAll(".tab-btn")).find(btn => 
-        btn.getAttribute("onclick").includes(`'${tabId}'`)
+        btn.getAttribute("onclick").includes("'" + tabId + "'")
       );
       if (targetBtn) targetBtn.classList.add("active");
 
-      const targetPanel = document.getElementById(`tab-${tabId}`);
+      const targetPanel = document.getElementById("tab-" + tabId);
       if (targetPanel) targetPanel.classList.add("active");
     }
   </script>
 </body>
 </html>
-
