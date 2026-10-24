@@ -1,0 +1,3 @@
+# Cloudflare Wrangler 캐시 및 빌드 디렉터리
+.wrangler/
+index.html
