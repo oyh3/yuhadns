@@ -23,6 +23,10 @@ Cloudflare Workers 위에서 동작하는 고성능 **DNS-over-HTTPS (DoH)** 필
 - **RFC 1035 규격 준수 차단 패킷 생성**
   - 차단 목록 매칭 시 RFC 표준 형식의 `NXDOMAIN` (RCODE 3) 즉시 반환
   - EDNS0 전치 에러 및 포맷 오류 패킷(FORMERR) 표준 처리
+- **가상 사설 TLD 및 커스텀 로컬 도메인 지원**
+  - `.yuha`, `.yu`, `.comm`, `.yh` 등 사설 도메인 접속 시 지정된 IP(기본 `127.0.0.1` 또는 사설 서버 IP)로 즉시 해석
+  - IPv6(AAAA) 질의 시 `NODATA(NOERROR)`를 반환하여 IPv6 지연/타임아웃 없이 IPv4로 매끄럽게 연결
+  - `config.js`를 통해 개별 도메인별 IP 커스텀 가능
 - **Cloudflare Edge Cache API 연동**
   - 도메인/질의타입/태그를 조합한 고유 캐시 키 생성
   - `ctx.waitUntil`을 통한 비동기 엣지 캐싱으로 응답 지연 방지
@@ -128,6 +132,34 @@ export const CONFIG_PROFILES = {
 | `name` *(선택)* | `string` | 소개 웹페이지에 표시할 프로필 이름 (미지정 시 `TAG 프로필` 자동 생성) |
 | `description` *(선택)* | `string` | 소개 웹페이지에 표시할 상세 설명 (미지정 시 규칙 수 기반 자동 생성) |
 | `badge` *(선택)* | `string` | 프로필 카드에 표시할 강조 뱃지 텍스트 |
+
+---
+
+## 🌐 가상 사설 TLD 및 로컬 도메인 설정 (`CUSTOM_TLDS`)
+
+`.yuha`, `.yu`, `.comm`, `.yh` 등 사설 TLD로 끝나는 도메인을 입력했을 때 연결할 IP 주소를 설정할 수 있습니다.
+
+```javascript
+// config.js
+
+// 1. TLD 단위 일괄 매핑 (예: *.yuha, *.yu, *.comm, *.yh)
+export const CUSTOM_TLDS = {
+  "yuha": "127.0.0.1",
+  "yu": "127.0.0.1",
+  "comm": "127.0.0.1",
+  "yh": "127.0.0.1"
+};
+
+// 2. 특정 FQDN 도메인 개별 매핑 (TLD 기본값보다 우선 적용)
+export const CUSTOM_RECORDS = {
+  "router.yuha": "192.168.0.1",
+  "home.yh": "192.168.0.100",
+  "nas.yu": "192.168.0.50"
+};
+```
+
+- 클라이언트 기기나 브라우저에서 Yuhadns를 DNS로 설정하면, 공인 인터넷 루트에 없는 사설 도메인도 지정한 사설 IP/홈서버 IP로 즉시 해석되어 브라우저에서 바로 접속할 수 있습니다.
+- IPv6(AAAA) 질의 시 `NODATA(NOERROR)`를 반환하여 접속 지연 없이 바로 IPv4로 연결됩니다.
 
 ---
 

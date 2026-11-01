@@ -4,7 +4,7 @@
  * =========================================================================
  */
 
-import { CONFIG_PROFILES, DEFAULT_UPSTREAMS, DEFAULT_MODE } from "./config.js";
+import { CONFIG_PROFILES, DEFAULT_UPSTREAMS, DEFAULT_MODE, CUSTOM_TLDS, CUSTOM_RECORDS } from "./config.js";
 import { renderLandingHtml } from "./landing.js";
 
 export default {
@@ -47,7 +47,7 @@ export default {
     const pathTag = pathMatch[1];
     const queryTag = url.searchParams.get("tag");
     const currentTag = pathTag || queryTag || "all";
-    const profile = CONFIG_PROFILES[currentTag] || CONFIG_PROFILES.all;
+    const profile = CONFIG_PROFILES[currentTag] || CONFIG_PROFILES.all || { lists: [], upstreams: DEFAULT_UPSTREAMS };
 
     let dnsMessage;
     try {
@@ -98,22 +98,65 @@ export default {
       });
     }
 
-    // Cloudflare Cache API 조회
-    const cache = caches.default;
-    const cacheKey = new Request(
-      `https://${url.host}/dns-cache?tag=${encodeURIComponent(currentTag)}&q=${encodeURIComponent(domain)}&t=${qtype}`,
-      { method: "GET" }
-    );
+    // 커스텀 가상 TLD 및 도메인 검사 (.yuha, .yu, .comm, .yh 등)
+    const customTargetIp = getCustomDomainTarget(domain, CUSTOM_RECORDS, CUSTOM_TLDS);
+    if (customTargetIp) {
+      let customResponseBuf;
+      if (qtype === 1) {
+        // A 레코드 (IPv4) 질의 -> 지정된 목적지 IP 응답
+        customResponseBuf = createAResponse(dnsMessage, questionBuffer, customTargetIp, 300);
+      } else {
+        // AAAA(IPv6), HTTPS 등 기타 질의 -> NODATA(NOERROR) 응답으로 IPv6 대기/타임아웃 방지
+        customResponseBuf = createNoDataResponse(dnsMessage, questionBuffer);
+      }
 
-    let cachedResponse = await cache.match(cacheKey);
-    if (cachedResponse) {
-      return cachedResponse;
+      return new Response(customResponseBuf, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/dns-message",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "public, max-age=300"
+        }
+      });
+    }
+
+    // Cloudflare Cache API 조회 (오류 시 무시하고 업스트림 패스)
+    let cache = null;
+    let cacheKey = null;
+    try {
+      if (typeof caches !== "undefined" && caches && caches.default) {
+        cache = caches.default;
+        cacheKey = new Request(
+          `https://${url.host}/dns-cache?tag=${encodeURIComponent(currentTag)}&q=${encodeURIComponent(domain)}&t=${qtype}`,
+          { method: "GET" }
+        );
+
+        const cachedResponse = await cache.match(cacheKey);
+        if (cachedResponse) {
+          const cachedBuf = new Uint8Array(await cachedResponse.arrayBuffer());
+          // [핵심 해결] RFC 1035: 클라이언트의 Transaction ID로 첫 2바이트 반드시 교체
+          if (cachedBuf.length >= 2 && dnsMessage.length >= 2) {
+            cachedBuf[0] = dnsMessage[0];
+            cachedBuf[1] = dnsMessage[1];
+          }
+          return new Response(cachedBuf.buffer, {
+            status: 200,
+            headers: {
+              "Content-Type": "application/dns-message",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=60"
+            }
+          });
+        }
+      }
+    } catch {
+      // 캐시 읽기 실패 시 업스트림 직접 질의로 안전하게 폴백
     }
 
     // 업스트림 조회 (fastest: 병렬 경합 또는 priority: 우선순위 순차 시도)
     const targetUpstreams = profile.upstreams && profile.upstreams.length > 0 ? profile.upstreams : DEFAULT_UPSTREAMS;
     let mode = (profile.mode || DEFAULT_MODE || "fastest").toLowerCase();
-    if (mode !== "priority") mode = "fastest"; // 오타 방지 및 표준화
+    if (mode !== "priority") mode = "fastest";
 
     const upstreamResponse = await fetchUpstream(targetUpstreams, dnsMessage, mode);
 
@@ -136,7 +179,13 @@ export default {
     });
 
     // 비동기 엣지 캐시 적재
-    ctx.waitUntil(cache.put(cacheKey, finalResponse.clone()));
+    if (cache && cacheKey && ctx && typeof ctx.waitUntil === "function") {
+      try {
+        ctx.waitUntil(cache.put(cacheKey, finalResponse.clone()));
+      } catch {
+        // 캐시 저장 실패 시 무시
+      }
+    }
 
     return finalResponse;
   }
@@ -211,7 +260,6 @@ function parseDnsQuestionStrict(buffer) {
   const qclass = (buffer[offset + 2] << 8) | buffer[offset + 3];
   offset += 4;
 
-  // 순수 Question 섹션 바이너리 추출 (Additional OPT RR 배제)
   const questionBuffer = buffer.slice(12, offset);
 
   return {
@@ -235,22 +283,113 @@ function isBlacklisted(domain, lists) {
  */
 function createNxdomainResponse(rawQuery, questionBuffer) {
   const header = new Uint8Array(12);
-  // Transaction ID 복제
   header[0] = rawQuery[0];
   header[1] = rawQuery[1];
 
-  // Flags: QR=1 (응답), RD 원본 유지, RA=1 (재귀 지원), RCODE=3 (NXDOMAIN)
   const rd = rawQuery[2] & 0x01;
   header[2] = 0x80 | rd;
-  header[3] = 0x83;
+  header[3] = 0x83; // RCODE=3 (NXDOMAIN)
 
-  // 레코드 카운트: QD=1, AN=0, NS=0, AR=0
-  header[4] = 0x00; header[5] = 0x01;
+  header[4] = 0x00; header[5] = 0x01; // QDCOUNT=1
   header[6] = 0x00; header[7] = 0x00;
   header[8] = 0x00; header[9] = 0x00;
   header[10] = 0x00; header[11] = 0x00;
 
-  // Header + 순수 Question 섹션만 결합하여 EDNS0 전치 에러 원천 차단
+  const response = new Uint8Array(12 + questionBuffer.length);
+  response.set(header, 0);
+  response.set(questionBuffer, 12);
+
+  return response.buffer;
+}
+
+/**
+ * 커스텀 도메인 / TLD 매핑 대상 IP 확인 (.yuha, .yu, .comm, .yh 등)
+ */
+function getCustomDomainTarget(domain, customRecords = {}, customTlds = {}) {
+  if (!domain) return null;
+  const lower = domain.toLowerCase();
+
+  // 1) 개별 도메인 FQDN 완전 일치 (예: "router.yuha")
+  if (customRecords && customRecords[lower]) {
+    return customRecords[lower];
+  }
+
+  // 2) TLD 파싱 및 매칭 (.yuha, .yu, .comm, .yh 등)
+  const parts = lower.split(".");
+  const rawTld = parts[parts.length - 1];
+  const cleanTld = rawTld.replace(/^\./, "");
+
+  if (customTlds) {
+    if (customTlds[cleanTld]) return customTlds[cleanTld];
+    if (customTlds["." + cleanTld]) return customTlds["." + cleanTld];
+  }
+
+  return null;
+}
+
+/**
+ * RFC 1035 규격 준수 A 레코드 응답 패킷 생성기 (IPv4)
+ */
+function createAResponse(rawQuery, questionBuffer, ipStr = "127.0.0.1", ttl = 300) {
+  const header = new Uint8Array(12);
+  header[0] = rawQuery[0];
+  header[1] = rawQuery[1];
+
+  const rd = rawQuery[2] & 0x01;
+  header[2] = 0x84 | rd; // QR=1(응답), AA=1(Authoritative), RD 유지
+  header[3] = 0x80;      // RA=1, RCODE=0 (NoError)
+
+  header[4] = 0x00; header[5] = 0x01; // QDCOUNT = 1
+  header[6] = 0x00; header[7] = 0x01; // ANCOUNT = 1
+  header[8] = 0x00; header[9] = 0x00; // NSCOUNT = 0
+  header[10] = 0x00; header[11] = 0x00; // ARCOUNT = 0
+
+  const ipParts = ipStr.split(".").map(Number);
+  const ipBytes = (ipParts.length === 4 && ipParts.every(n => !isNaN(n) && n >= 0 && n <= 255))
+    ? ipParts
+    : [127, 0, 0, 1];
+
+  // Answer Section (총 16바이트)
+  const answer = new Uint8Array(16);
+  answer[0] = 0xC0; answer[1] = 0x0C; // Name pointer to offset 12 (Question)
+  answer[2] = 0x00; answer[3] = 0x01; // Type A (1)
+  answer[4] = 0x00; answer[5] = 0x01; // Class IN (1)
+  answer[6] = (ttl >>> 24) & 0xFF;
+  answer[7] = (ttl >>> 16) & 0xFF;
+  answer[8] = (ttl >>> 8) & 0xFF;
+  answer[9] = ttl & 0xFF;
+  answer[10] = 0x00; answer[11] = 0x04; // RDLENGTH = 4
+  answer[12] = ipBytes[0];
+  answer[13] = ipBytes[1];
+  answer[14] = ipBytes[2];
+  answer[15] = ipBytes[3];
+
+  const response = new Uint8Array(12 + questionBuffer.length + 16);
+  response.set(header, 0);
+  response.set(questionBuffer, 12);
+  response.set(answer, 12 + questionBuffer.length);
+
+  return response.buffer;
+}
+
+/**
+ * RFC 1035 규격 준수 NODATA (NOERROR, ANCOUNT=0) 응답 패킷 생성기
+ * (AAAA 질의 등 IPv4 외 질의 시 IPv6 타임아웃을 방지하기 위해 빈 정상 응답 반환)
+ */
+function createNoDataResponse(rawQuery, questionBuffer) {
+  const header = new Uint8Array(12);
+  header[0] = rawQuery[0];
+  header[1] = rawQuery[1];
+
+  const rd = rawQuery[2] & 0x01;
+  header[2] = 0x84 | rd;
+  header[3] = 0x80; // RCODE=0 (NOERROR)
+
+  header[4] = 0x00; header[5] = 0x01; // QDCOUNT = 1
+  header[6] = 0x00; header[7] = 0x00; // ANCOUNT = 0
+  header[8] = 0x00; header[9] = 0x00;
+  header[10] = 0x00; header[11] = 0x00;
+
   const response = new Uint8Array(12 + questionBuffer.length);
   response.set(header, 0);
   response.set(questionBuffer, 12);
@@ -274,9 +413,6 @@ function createRcodeResponse(rawQuery, rcode) {
 
 /**
  * 모드별 업스트림 라우팅 분기기
- * @param {string[]} upstreams - 업스트림 DoH 서버 URL 배열
- * @param {Uint8Array} dnsMessage - 전송할 DNS Wire-format 메시지
- * @param {"fastest"|"priority"} mode - 업스트림 조회 모드
  */
 async function fetchUpstream(upstreams, dnsMessage, mode = "fastest") {
   if (mode === "priority") {
@@ -289,7 +425,7 @@ async function fetchUpstream(upstreams, dnsMessage, mode = "fastest") {
  * 1) fastest 모드: 병렬 경합(Race) 기반 가장 빠른 응답 반환
  */
 async function fetchUpstreamFastest(upstreams, dnsMessage) {
-  const timeoutMs = 2000;
+  const timeoutMs = 2500;
   const attempts = upstreams.map(async (url) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -321,10 +457,10 @@ async function fetchUpstreamFastest(upstreams, dnsMessage) {
 }
 
 /**
- * 2) priority 모드: 배열 순서(우선순위)대로 시도하며 실패 시 다음 업스트림으로 fallback
+ * 2) priority 모드: 배열 순서(우선순위)대로 시도하며 실패 시 다음 업스트림으로 신속 fallback
  */
 async function fetchUpstreamPriority(upstreams, dnsMessage) {
-  const timeoutMs = 2000;
+  const timeoutMs = 1200; // 빠른 fallback을 위해 타임아웃 단축
 
   for (const url of upstreams) {
     const controller = new AbortController();

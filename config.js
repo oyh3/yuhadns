@@ -14,21 +14,45 @@ export const DEFAULT_UPSTREAMS = [
 // 기본 업스트림 모드: "fastest" (병렬 경합) 또는 "priority" (우선순위 순차 시도)
 export const DEFAULT_MODE = "fastest";
 
+/**
+ * =========================================================================
+ * 커스텀 가상 TLD 및 도메인 레코드 매핑 (.yuha, .yu, .comm, .yh 등)
+ * =========================================================================
+ */
+
+// 1. 커스텀 TLD 기본 목적지 IP
+// 해당 TLD로 끝나는 모든 도메인(예: site.yuha, nas.yu 등)에 일괄 적용됩니다.
+export const CUSTOM_TLDS = {
+  "yuha": "127.0.0.1",
+  "yu": "127.0.0.1",
+  "comm": "127.0.0.1",
+  "yh": "127.0.0.1"
+};
+
+// 2. 개별 도메인별 상세 매핑 (TLD 기본값보다 우선 적용)
+// 특정 도메인만 다른 IP(예: 공유기 192.168.0.1, 홈서버 등)로 연결하고 싶을 때 등록합니다.
+export const CUSTOM_RECORDS = {
+  // "router.yuha": "192.168.0.1",
+  // "nas.yu": "192.168.0.50",
+  // "home.yh": "192.168.0.100",
+  // "my.comm": "10.0.0.1"
+};
+
 // 태그별 프로필 설정
 export const CONFIG_PROFILES = {
   fastdns: {
     mode: "fastest",
-    lists: ["example.com"],
+    lists: [],
     upstreams: [
       "https://1.1.1.1/dns-query",
       "https://1.0.0.1/dns-query",
-      "https://168.126.63.1/dns-query",
       "https://8.8.8.8/dns-query",
-      "https://210.220.163.82/dns-query"
+      "https://9.9.9.9/dns-query",
+      "https://1.1.1.2/dns-query"
     ]
   },
   all: {
-    mode: "priority",
+    mode: "fastest",
     lists: [
       "youtube.com",
       "applovin.com",
@@ -82,7 +106,7 @@ export const CONFIG_PROFILES = {
     ]
   },
   nonyt: {
-    mode: "priority", // nonyt 프로필은 우선순위 순차 시도 예시
+    mode: "fastset", 
     lists: [
       "applovin.com",
       "applvn.com",
@@ -183,7 +207,7 @@ export const CONFIG_PROFILES = {
     ]
   },
   google:{
-    mode: "fastset",
+    mode: "fastest",
     upstreams:[
       "https://8.8.8.8/dns-query",
       "https://8.8.4.4/dns-query"
