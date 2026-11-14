@@ -1,0 +1,54 @@
+[ req ]
+default_bits        = 2048
+default_md          = sha256
+distinguished_name  = req_distinguished_name
+prompt              = no
+
+[ req_distinguished_name ]
+C   = KR
+ST  = Seoul
+L   = Seoul
+O   = YuhaDNS Local Authority
+OU  = Development
+CN  = YuhaDNS Root CA
+
+[ v3_ca ]
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always,issuer
+basicConstraints       = critical, CA:true
+keyUsage               = critical, digitalSignature, cRLSign, keyCertSign
+
+[ server_req ]
+default_bits        = 2048
+default_md          = sha256
+distinguished_name  = server_distinguished_name
+prompt              = no
+
+[ server_distinguished_name ]
+C   = KR
+ST  = Seoul
+L   = Seoul
+O   = YuhaDNS
+OU  = Development
+CN  = *.yuha
+
+[ v3_server ]
+authorityKeyIdentifier = keyid,issuer
+basicConstraints       = CA:FALSE
+keyUsage               = digitalSignature, keyEncipherment
+extendedKeyUsage       = serverAuth, clientAuth
+subjectAltName         = @alt_names
+
+[ alt_names ]
+DNS.1  = *.yuha
+DNS.2  = yuha
+DNS.3  = *.yu
+DNS.4  = yu
+DNS.5  = *.comm
+DNS.6  = comm
+DNS.7  = *.yh
+DNS.8  = yh
+DNS.9  = localhost
+DNS.10 = *.localhost
+IP.1   = 127.0.0.1
+IP.2   = ::1

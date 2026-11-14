@@ -27,6 +27,13 @@ Cloudflare Workers 위에서 동작하는 고성능 **DNS-over-HTTPS (DoH)** 필
   - `.yuha`, `.yu`, `.comm`, `.yh` 등 사설 도메인 접속 시 지정된 IP(기본 `127.0.0.1` 또는 사설 서버 IP)로 즉시 해석
   - IPv6(AAAA) 질의 시 `NODATA(NOERROR)`를 반환하여 IPv6 지연/타임아웃 없이 IPv4로 매끄럽게 연결
   - `config.js`를 통해 개별 도메인별 IP 커스텀 가능
+- **스마트 리다이렉트 지원 (DNS CNAME + HTTP 웹 리다이렉트)**
+  - **DNS CNAME 별칭**: `CUSTOM_RECORDS`에 도메인을 입력하면 CNAME 레코드로 응답하여 해당 도메인으로 별칭 연결
+  - **웹 URL 리다이렉트**: `/go/:key`, `/r/:key` 단축 URL 및 `/redirect?to=...`를 통한 브라우저 302 리다이렉트
+  - `CUSTOM_RECORDS`에 웹 URL(`https://...`) 등록 시 DNS CNAME 및 웹 리다이렉트 자동 연동
+- **로컬 신뢰 와일드카드 SSL/TLS 인증서 기본 제공 (`certs/`)**
+  - `ca.crt` (Root CA) 1회 설치로 `*.yuha`, `*.comm`, `*.yh`, `localhost` 등 사설 도메인에 브라우저 경고 없는 HTTPS 지원
+  - Node.js, Python, Nginx 등 로컬 앱 개발 시 즉시 적용 가능한 서버 인증서(`server.crt`, `server.key`) 및 원클릭 발급 스크립트 포함
 - **Cloudflare Edge Cache API 연동**
   - 도메인/질의타입/태그를 조합한 고유 캐시 키 생성
   - `ctx.waitUntil`을 통한 비동기 엣지 캐싱으로 응답 지연 방지
@@ -41,6 +48,11 @@ Cloudflare Workers 위에서 동작하는 고성능 **DNS-over-HTTPS (DoH)** 필
 ├── config.js       # 태그 프로필, 차단 도메인, 업스트림 및 메타데이터 설정
 ├── landing.js      # 서비스 소개 웹페이지 템플릿 및 SSR 렌더러
 ├── index.html      # 독립형 서비스 소개 웹페이지 (정적 호스팅/오프라인 겸용)
+├── certs/          # 로컬 신뢰 SSL/TLS 인증서 및 발급 스크립트
+│   ├── ca.crt      # OS/브라우저에 신뢰 등록할 Root CA 인증서
+│   ├── server.crt  # *.yuha, *.comm 등 와일드카드 서버 인증서
+│   ├── server.key  # 서버 개인키
+│   └── README.md   # OS별 설치 및 로컬 앱 HTTPS 연동 가이드
 └── README.md       # 프로젝트 문서
 ```
 
@@ -152,13 +164,31 @@ export const CUSTOM_TLDS = {
 
 // 2. 특정 FQDN 도메인 개별 매핑 (TLD 기본값보다 우선 적용)
 export const CUSTOM_RECORDS = {
+  // [A 레코드] 사설 IP / 홈서버 연결
   "router.yuha": "192.168.0.1",
   "home.yh": "192.168.0.100",
-  "nas.yu": "192.168.0.50"
+
+  // [DNS CNAME 별칭] 다른 도메인으로 별칭 연결
+  "search.yuha": "google.com",
+  "portal.comm": "naver.com",
+
+  // [웹 URL 리다이렉트] 웹사이트 바로 이동
+  "yt.yh": "https://www.youtube.com"
+};
+
+// 3. 웹 URL 단축 리다이렉트 (HTTP 302)
+export const HTTP_REDIRECTS = {
+  // 예: https://your-worker.workers.dev/go/yt -> https://www.youtube.com
+  "yt": "https://www.youtube.com",
+  "google": "https://www.google.com",
+  "naver": "https://www.naver.com",
+  "github": "https://github.com"
 };
 ```
 
-- 클라이언트 기기나 브라우저에서 Yuhadns를 DNS로 설정하면, 공인 인터넷 루트에 없는 사설 도메인도 지정한 사설 IP/홈서버 IP로 즉시 해석되어 브라우저에서 바로 접속할 수 있습니다.
+- **DNS CNAME 리다이렉트**: IP 대신 도메인(예: `"google.com"`)을 적으면 DNS CNAME 레코드로 응답하여 해당 서비스로 연결됩니다.
+- **웹 단축 URL 리다이렉트**: 브라우저에서 `https://<워커주소>/go/yt` 또는 `https://<워커주소>/r/google` 접속 시 지정된 URL로 302 리다이렉트됩니다.
+- **다이렉트 파라미터 리다이렉트**: `https://<워커주소>/redirect?to=https://...` 형태로 임의의 목적지 URL 리다이렉트도 지원합니다.
 - IPv6(AAAA) 질의 시 `NODATA(NOERROR)`를 반환하여 접속 지연 없이 바로 IPv4로 연결됩니다.
 
 ---
@@ -170,6 +200,8 @@ export const CUSTOM_RECORDS = {
 | 접근 URL | 유형 | 설명 |
 | :--- | :--- | :--- |
 | `https://your-worker.workers.dev/` | 웹페이지 | **서비스 소개 및 설정 가이드 포털** |
+| `https://your-worker.workers.dev/go/:key` | 웹 리다이렉트 | 단축 URL 302 리다이렉트 (예: `/go/yt`, `/r/google`) |
+| `https://your-worker.workers.dev/redirect?to=...` | 웹 리다이렉트 | 목적지 파라미터 URL 302 리다이렉트 |
 | `https://your-worker.workers.dev/api/profiles` | REST API | 등록된 프로필 메타데이터 JSON 응답 |
 | `https://your-worker.workers.dev/dns-query` | DoH | 기본 프로필(`all`) DNS 질의 |
 | `https://your-worker.workers.dev/dns-query/:tag` | DoH | 태그 지정 프로필 DNS 질의 (예: `/fastdns`, `/google`) |

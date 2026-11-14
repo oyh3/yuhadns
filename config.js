@@ -30,12 +30,38 @@ export const CUSTOM_TLDS = {
 };
 
 // 2. 개별 도메인별 상세 매핑 (TLD 기본값보다 우선 적용)
-// 특정 도메인만 다른 IP(예: 공유기 192.168.0.1, 홈서버 등)로 연결하고 싶을 때 등록합니다.
+// - IP 주소 입력 시: IPv4 A 레코드로 연결 (예: "192.168.0.1")
+// - 도메인 이름 입력 시: DNS CNAME 레코드로 별칭 리다이렉트 (예: "google.com")
+// - URL(http/https) 입력 시: 해당 웹사이트로 스마트 리다이렉트 (예: "https://www.youtube.com")
 export const CUSTOM_RECORDS = {
+  // 사용자 등록 도메인
+  "me.yuha": "https://github.com/oyh3",
+  "omok.yuha": "yuhaom.kro.kr",
+  "wifi.yuha": "192.168.0.1"
+  // [A 레코드 예시] 사설 IP / 홈서버 연결
   // "router.yuha": "192.168.0.1",
   // "nas.yu": "192.168.0.50",
   // "home.yh": "192.168.0.100",
-  // "my.comm": "10.0.0.1"
+
+  // [DNS CNAME 리다이렉트 예시] 다른 도메인으로 별칭 연결
+  // "search.yuha": "google.com",
+  // "portal.comm": "naver.com"
+};
+
+/**
+ * =========================================================================
+ * 웹 URL 단축 리다이렉트 설정
+ * =========================================================================
+ */
+export const HTTP_REDIRECTS = {
+  // /go/:key 또는 /r/:key 로 접속 시 자동 리다이렉트 (HTTP 302)
+  // 예: https://your-worker.workers.dev/go/yt -> https://www.youtube.com
+  "me": "https://github.com/oyh3",
+  "omok": "http://yuhaom.kro.kr",
+  "yt": "https://www.youtube.com",
+  "google": "https://www.google.com",
+  "naver": "https://www.naver.com",
+  "github": "https://github.com"
 };
 
 // 태그별 프로필 설정
@@ -106,7 +132,7 @@ export const CONFIG_PROFILES = {
     ]
   },
   nonyt: {
-    mode: "fastset", 
+    mode: "fastest", 
     lists: [
       "applovin.com",
       "applvn.com",
@@ -214,4 +240,3 @@ export const CONFIG_PROFILES = {
     ]
   }
 };
-

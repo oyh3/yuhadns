@@ -4,12 +4,18 @@
  * =========================================================================
  */
 
-import { CONFIG_PROFILES, DEFAULT_UPSTREAMS, DEFAULT_MODE, CUSTOM_TLDS, CUSTOM_RECORDS } from "./config.js";
+import { CONFIG_PROFILES, DEFAULT_UPSTREAMS, DEFAULT_MODE, CUSTOM_TLDS, CUSTOM_RECORDS, HTTP_REDIRECTS } from "./config.js";
 import { renderLandingHtml } from "./landing.js";
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    // 0) 웹 URL 리다이렉트 처리 (단축 URL /go/:key, /r/:key 또는 /redirect?to=... 등)
+    const redirectUrl = getHttpRedirectTarget(url, request.headers);
+    if (redirectUrl) {
+      return Response.redirect(redirectUrl, 302);
+    }
 
     // 1) 루트 및 소개 웹페이지 서빙 (GET / 또는 GET /index.html)
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
@@ -99,15 +105,23 @@ export default {
     }
 
     // 커스텀 가상 TLD 및 도메인 검사 (.yuha, .yu, .comm, .yh 등)
-    const customTargetIp = getCustomDomainTarget(domain, CUSTOM_RECORDS, CUSTOM_TLDS);
-    if (customTargetIp) {
+    const customTarget = getCustomDomainTarget(domain, CUSTOM_RECORDS, CUSTOM_TLDS);
+    if (customTarget) {
       let customResponseBuf;
-      if (qtype === 1) {
-        // A 레코드 (IPv4) 질의 -> 지정된 목적지 IP 응답
-        customResponseBuf = createAResponse(dnsMessage, questionBuffer, customTargetIp, 300);
+
+      // 1) CNAME 도메인 별칭 또는 웹 URL 리다이렉트 대상인 경우
+      if (isUrl(customTarget) || (!isIpv4(customTarget) && isDomainName(customTarget))) {
+        const targetDomain = extractDomain(customTarget);
+        customResponseBuf = createCnameResponse(dnsMessage, questionBuffer, targetDomain, 300);
       } else {
-        // AAAA(IPv6), HTTPS 등 기타 질의 -> NODATA(NOERROR) 응답으로 IPv6 대기/타임아웃 방지
-        customResponseBuf = createNoDataResponse(dnsMessage, questionBuffer);
+        // 2) IPv4 주소 매핑 대상인 경우
+        if (qtype === 1) {
+          // A 레코드 (IPv4) 질의 -> 지정된 목적지 IP 응답
+          customResponseBuf = createAResponse(dnsMessage, questionBuffer, customTarget, 300);
+        } else {
+          // AAAA(IPv6), HTTPS 등 기타 질의 -> NODATA(NOERROR) 응답으로 IPv6 대기/타임아웃 방지
+          customResponseBuf = createNoDataResponse(dnsMessage, questionBuffer);
+        }
       }
 
       return new Response(customResponseBuf, {
@@ -190,6 +204,71 @@ export default {
     return finalResponse;
   }
 };
+
+/**
+ * 웹 URL 리다이렉트 대상 URL 판별
+ */
+function getHttpRedirectTarget(url, headers) {
+  // 1) 쿼리 파라미터 기반 /redirect?to=https://...
+  if (url.pathname === "/redirect") {
+    const to = url.searchParams.get("to") || url.searchParams.get("url");
+    if (to && isUrl(to)) return to;
+  }
+
+  // 2) 단축 경로 /go/:key 또는 /r/:key (예: /go/yt -> https://www.youtube.com)
+  const pathParts = url.pathname.replace(/^\/+|\/+$/g, "").split("/");
+  if ((pathParts[0] === "go" || pathParts[0] === "r") && pathParts[1]) {
+    const key = pathParts[1].toLowerCase();
+    if (HTTP_REDIRECTS && HTTP_REDIRECTS[key]) return HTTP_REDIRECTS[key];
+  }
+
+  // 3) 전체 경로 매칭
+  if (HTTP_REDIRECTS && HTTP_REDIRECTS[url.pathname]) {
+    return HTTP_REDIRECTS[url.pathname];
+  }
+
+  // 4) Host 헤더 기반 매칭 (예: CUSTOM_RECORDS에 "yt.yuha": "https://youtube.com" 등록된 경우)
+  const host = (headers.get("host") || "").split(":")[0].toLowerCase();
+  if (CUSTOM_RECORDS && CUSTOM_RECORDS[host] && isUrl(CUSTOM_RECORDS[host])) {
+    return CUSTOM_RECORDS[host];
+  }
+  if (HTTP_REDIRECTS && HTTP_REDIRECTS[host]) {
+    return HTTP_REDIRECTS[host];
+  }
+
+  return null;
+}
+
+function isIpv4(str) {
+  if (typeof str !== "string") return false;
+  const parts = str.trim().split(".");
+  return parts.length === 4 && parts.every(p => {
+    const n = Number(p);
+    return !isNaN(n) && n >= 0 && n <= 255 && String(n) === p;
+  });
+}
+
+function isUrl(str) {
+  if (typeof str !== "string") return false;
+  return /^https?:\/\//i.test(str.trim());
+}
+
+function isDomainName(str) {
+  if (typeof str !== "string") return false;
+  const clean = str.trim().split(/[\/:]/)[0];
+  return /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(clean);
+}
+
+function extractDomain(target) {
+  if (isUrl(target)) {
+    try {
+      return new URL(target).hostname;
+    } catch {
+      return target.replace(/^https?:\/\//i, "").split(/[\/:]/)[0];
+    }
+  }
+  return target.trim().split(/[\/:]/)[0];
+}
 
 /**
  * config.js의 CONFIG_PROFILES로부터 소개 페이지용 메타데이터 추출
@@ -279,7 +358,32 @@ function isBlacklisted(domain, lists) {
 }
 
 /**
- * RFC 규격 준수 NXDOMAIN 응답 패킷 생성기
+ * 커스텀 도메인 / TLD 매핑 대상 확인 (.yuha, .yu, .comm, .yh 등)
+ */
+function getCustomDomainTarget(domain, customRecords = {}, customTlds = {}) {
+  if (!domain) return null;
+  const lower = domain.toLowerCase();
+
+  // 1) 개별 도메인 FQDN 완전 일치 (예: "router.yuha")
+  if (customRecords && customRecords[lower]) {
+    return customRecords[lower];
+  }
+
+  // 2) TLD 파싱 및 매칭 (.yuha, .yu, .comm, .yh 등)
+  const parts = lower.split(".");
+  const rawTld = parts[parts.length - 1];
+  const cleanTld = rawTld.replace(/^\./, "");
+
+  if (customTlds) {
+    if (customTlds[cleanTld]) return customTlds[cleanTld];
+    if (customTlds["." + cleanTld]) return customTlds["." + cleanTld];
+  }
+
+  return null;
+}
+
+/**
+ * RFC 1035 규격 준수 NXDOMAIN 응답 패킷 생성기
  */
 function createNxdomainResponse(rawQuery, questionBuffer) {
   const header = new Uint8Array(12);
@@ -303,28 +407,17 @@ function createNxdomainResponse(rawQuery, questionBuffer) {
 }
 
 /**
- * 커스텀 도메인 / TLD 매핑 대상 IP 확인 (.yuha, .yu, .comm, .yh 등)
+ * 표준 RCODE 헤더 생성기
  */
-function getCustomDomainTarget(domain, customRecords = {}, customTlds = {}) {
-  if (!domain) return null;
-  const lower = domain.toLowerCase();
-
-  // 1) 개별 도메인 FQDN 완전 일치 (예: "router.yuha")
-  if (customRecords && customRecords[lower]) {
-    return customRecords[lower];
+function createRcodeResponse(rawQuery, rcode) {
+  const response = new Uint8Array(12);
+  if (rawQuery && rawQuery.length >= 2) {
+    response[0] = rawQuery[0];
+    response[1] = rawQuery[1];
   }
-
-  // 2) TLD 파싱 및 매칭 (.yuha, .yu, .comm, .yh 등)
-  const parts = lower.split(".");
-  const rawTld = parts[parts.length - 1];
-  const cleanTld = rawTld.replace(/^\./, "");
-
-  if (customTlds) {
-    if (customTlds[cleanTld]) return customTlds[cleanTld];
-    if (customTlds["." + cleanTld]) return customTlds["." + cleanTld];
-  }
-
-  return null;
+  response[2] = 0x81;
+  response[3] = 0x80 | (rcode & 0x0F);
+  return response.buffer;
 }
 
 /**
@@ -373,6 +466,65 @@ function createAResponse(rawQuery, questionBuffer, ipStr = "127.0.0.1", ttl = 30
 }
 
 /**
+ * RFC 1035 규격 준수 CNAME 레코드 응답 패킷 생성기 (DNS 도메인 별칭 리다이렉트)
+ */
+function createCnameResponse(rawQuery, questionBuffer, targetDomain, ttl = 300) {
+  const header = new Uint8Array(12);
+  header[0] = rawQuery[0];
+  header[1] = rawQuery[1];
+
+  const rd = rawQuery[2] & 0x01;
+  header[2] = 0x84 | rd; // QR=1, AA=1, RD 유지
+  header[3] = 0x80;      // RA=1, RCODE=0 (NoError)
+
+  header[4] = 0x00; header[5] = 0x01; // QDCOUNT = 1
+  header[6] = 0x00; header[7] = 0x01; // ANCOUNT = 1
+  header[8] = 0x00; header[9] = 0x00; // NSCOUNT = 0
+  header[10] = 0x00; header[11] = 0x00; // ARCOUNT = 0
+
+  const targetWire = encodeDomainName(targetDomain);
+
+  // Answer Section:
+  // NAME (2) + TYPE (2) + CLASS (2) + TTL (4) + RDLENGTH (2) + RDATA (targetWire.length)
+  const answer = new Uint8Array(12 + targetWire.length);
+  answer[0] = 0xC0; answer[1] = 0x0C; // Name pointer to offset 12 (Question)
+  answer[2] = 0x00; answer[3] = 0x05; // Type CNAME (5)
+  answer[4] = 0x00; answer[5] = 0x01; // Class IN (1)
+  answer[6] = (ttl >>> 24) & 0xFF;
+  answer[7] = (ttl >>> 16) & 0xFF;
+  answer[8] = (ttl >>> 8) & 0xFF;
+  answer[9] = ttl & 0xFF;
+  answer[10] = (targetWire.length >>> 8) & 0xFF;
+  answer[11] = targetWire.length & 0xFF;
+  answer.set(targetWire, 12);
+
+  const response = new Uint8Array(12 + questionBuffer.length + answer.length);
+  response.set(header, 0);
+  response.set(questionBuffer, 12);
+  response.set(answer, 12 + questionBuffer.length);
+
+  return response.buffer;
+}
+
+/**
+ * 도메인 문자열을 DNS Wire-format 바이너리로 인코딩 (예: "google.com" -> \x06google\x03com\x00)
+ */
+function encodeDomainName(domain) {
+  const clean = domain.trim().toLowerCase().replace(/^\.+|\.+$/g, "");
+  const parts = clean.split(".");
+  const bytes = [];
+  for (const p of parts) {
+    if (!p) continue;
+    bytes.push(p.length);
+    for (let i = 0; i < p.length; i++) {
+      bytes.push(p.charCodeAt(i));
+    }
+  }
+  bytes.push(0); // root label
+  return new Uint8Array(bytes);
+}
+
+/**
  * RFC 1035 규격 준수 NODATA (NOERROR, ANCOUNT=0) 응답 패킷 생성기
  * (AAAA 질의 등 IPv4 외 질의 시 IPv6 타임아웃을 방지하기 위해 빈 정상 응답 반환)
  */
@@ -394,20 +546,6 @@ function createNoDataResponse(rawQuery, questionBuffer) {
   response.set(header, 0);
   response.set(questionBuffer, 12);
 
-  return response.buffer;
-}
-
-/**
- * 표준 RCODE 헤더 생성기
- */
-function createRcodeResponse(rawQuery, rcode) {
-  const response = new Uint8Array(12);
-  if (rawQuery && rawQuery.length >= 2) {
-    response[0] = rawQuery[0];
-    response[1] = rawQuery[1];
-  }
-  response[2] = 0x81;
-  response[3] = 0x80 | (rcode & 0x0F);
   return response.buffer;
 }
 
