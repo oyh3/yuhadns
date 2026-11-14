@@ -236,3 +236,49 @@ npx wrangler dev
 # 3. 배포
 npx wrangler deploy
 ```
+
+```text
+현재 Jigsaw의 오픈소스 DoH 안드로이드 클라이언트인 'Intra' 소스코드를 기반으로 앱을 커스텀 빌드하고 있어.
+내가 자체 구축한 Cloudflare Workers 기반 DoH 서비스('YuhaDNS')와 완벽히 연동되도록 아래 기능들을 추가하고 수정해줘.
+
+---
+
+[백엔드 DNS 서버 정보]
+1. 기본 DoH 엔드포인트: https://[여기에_워커_도메인_입력]/dns-query
+2. 지원 프로필 (URL 경로 기반):
+   - 종합 차단: https://[워커_도메인]/dns-query/all
+   - 유튜브 허용/광고 차단: https://[워커_도메인]/dns-query/nonyt
+   - 초고속 통신사 DNS: https://[워커_도메인]/dns-query/fastdns
+3. 사설 가상 도메인 지원:
+   - *.yuha, *.comm, *.yh 도메인은 127.0.0.1 또는 내부 서버로 해석됨.
+4. 로컬 사설 Root CA 보유:
+   - *.yuha 등 사설 HTTPS 통신을 위한 자체 ca.crt 보유
+
+---
+
+[추가 및 수정 요청 기능]
+
+1. 기본 DNS 프리셋 등록 및 원클릭 프로필 선택 UI (Spinner 또는 Radio Group):
+   - 사용자가 긴 DoH URL을 직접 타이핑하지 않고도 UI에서 프로필을 선택할 수 있게 해줘:
+     ① 기본 종합 차단 (권장)
+     ② 광고만 차단 (유튜브 허용)
+     ③ 초고속 모드 (차단 없음)
+     ④ 직접 입력 (Custom URL)
+   - 앱 최초 실행 시 기본 서버가 구글(8.8.8.8) 대신 내 YuhaDNS 종합 차단 URL로 자동 지정되게 해줘.
+
+2. 사설 Root CA(ca.crt) 앱 내부 번들링 및 신뢰 설정:
+   - 안드로이드 기기 설정에 인증서를 수동 설치하지 않아도, 앱 내부(res/raw/ca.crt 및 res/xml/network_security_config.xml)에 Root CA를 내장하여 DoH 연결 및 앱 내 WebView/HTTP 통신에서 SSL 핸드셰이크 에러가 발생하지 않도록 설정해줘.
+
+3. 실시간 DNS 질의 로그 및 차단 카운터 UI 추가:
+   - Intra가 처리하는 실시간 DNS 질의 목록(도메인명, 응답 시간, 결과 상태)을 리사이클러뷰(RecyclerView)로 표시해줘.
+   - NXDOMAIN(차단된 광고 도메인)인 경우 빨간색 태그로 '차단됨' 표시 및 메인 화면에 '오늘 차단한 광고 수' 카운터를 띄워줘.
+
+4. 퀵 세팅 타일(Quick Settings Tile) 및 위젯 지원:
+   - 안드로이드 상단 알림창 빠른 설정 타일에서 앱을 켜지 않고도 원클릭으로 YuhaDNS를 On/Off 할 수 있는 TileService 코드를 작성해줘.
+
+---
+
+[출력 요구사항]
+- 수정해야 할 파일 경로(예: Go 모듈, DohServer.kt, MainActivity, AndroidManifest.xml 등)와 함께 변경/추가할 전체 코드를 명확히 보여줘.
+- 의존성 라이브러리가 추가된다면 build.gradle 수정 내용도 함께 포함해줘.
+```
