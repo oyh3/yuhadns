@@ -25,3 +25,4 @@ app의 yuhadns.apk를 설치하세요
 [이 웹사이트](https://simpledns.plus/apple-dot-doh)에 접속한 후 DNS query URL에 원하는 내용을 채우세요
 
 
+# ⚠️ 주의! : 구글 광고를 차단한다고 구글 api 관련을 싹 다 차단해서, 구글 지도, 플레이스토어 등이 먹통이 될 수 있습니다.
