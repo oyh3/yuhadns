@@ -1,9 +1,18 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "dns",
+<<<<<<< HEAD
   "main": "worker.js",
   "compatibility_date": "2026-10-19",
   "observability": {
     "enabled": true
+=======
+  "compatibility_date": "2026-10-19",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "."
+>>>>>>> 21e507a5b923498c7b17d29a24b7d120d5ffc05a
   }
 }

@@ -1,9 +1,15 @@
 # Cloudflare Wrangler 캐시 및 빌드 디렉터리
 .wrangler/
+<<<<<<< HEAD
+=======
+index.html
+
+>>>>>>> 21e507a5b923498c7b17d29a24b7d120d5ffc05a
 .dev.vars*
 !.dev.vars.example
 .env*
 !.env.example
+<<<<<<< HEAD
 
 # 보안: SSL/TLS 개인키 및 인증서 키스토어 (공개 저장소 노출 방지)
 *.key
@@ -26,3 +32,5 @@ build/
 .venv/
 venv/
 ENV/
+=======
+>>>>>>> 21e507a5b923498c7b17d29a24b7d120d5ffc05a
