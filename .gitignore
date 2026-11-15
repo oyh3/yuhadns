@@ -4,3 +4,25 @@
 !.dev.vars.example
 .env*
 !.env.example
+
+# 보안: SSL/TLS 개인키 및 인증서 키스토어 (공개 저장소 노출 방지)
+*.key
+*.pfx
+*.p12
+certs/ca.key
+certs/server.key
+certs/server.pfx
+
+# Python 빌드 및 캐시 파일
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+ENV/

@@ -1,0 +1,1 @@
+# 여기의 소스코드는 [다른 곳](https://github.com/oyh3/YdnsAPP)에 있습니다. 또한 이 앱의 소스코드는 Intra를 기반으로 하였습니다.
